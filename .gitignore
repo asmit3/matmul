@@ -2,3 +2,5 @@ benchmark-blas
 benchmark-blocked
 benchmark-naive
 *.o
+*.out
+*.err
