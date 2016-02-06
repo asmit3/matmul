@@ -1,5 +1,5 @@
 const char* dgemm_desc = "Simple blocked dgemm.";
-// #include "avxintrin_emu.h"
+#include "avxintrin-emu.h"
 
 #if defined(BLOCK_SIZE)
 #undef BLOCK_SIZE
@@ -14,10 +14,8 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 static void do_block (int lda, int M, int N, int K, double* A, double* B, double* C)
 {
   int i=0,j=0,k=0;
-  // double fa0,fb0,fa1,fb1,fa2,fb2,fa3,fb3;
-  double *Bvec;
-  double *Avec;
   double cij;
+  double* result = (double*) malloc(sizeof(double)*2);
   /* For each row i of A */
   for (i = 0; i < M; ++i)
     /* For each column j of B */ 
@@ -25,21 +23,37 @@ static void do_block (int lda, int M, int N, int K, double* A, double* B, double
     {
       /* Compute C(i,j) */
       cij = C[i+j*lda];
-      for (k = 0; k < (K/4)*4; k+=4) {
-        Avec = A + (k+i*lda);
-        Bvec = B + (k+j*lda);
-        cij += Avec[0]*Bvec[0] + Avec[1]*Bvec[1] + Avec[2]*Bvec[2] + Avec[3]*Bvec[3];
+      k=0;
+      for (; k < (K/8)*8; k+=8) {
+        __m256d Avec = _mm256_loadu_pd(A + (k+i*lda));
+        __m256d Bvec = _mm256_loadu_pd(B + (k+j*lda));
+        __m256d Cvec = _mm256_loadu_pd(A + (k+4+i*lda));
+        __m256d Dvec = _mm256_loadu_pd(B + (k+4+j*lda));
+        __m256d prod1 = _mm256_mul_pd(Avec, Bvec);
+        __m256d prod2 = _mm256_mul_pd(Cvec, Dvec);
+        __m256d temp = _mm256_hadd_pd(prod1, prod2);
+        __m128d dotproduct = _mm_add_pd( _mm256_extractf128_pd( temp, 0 ), _mm256_extractf128_pd( temp, 1 ) );
+        _mm_storeu_pd(result, dotproduct);
+        cij += result[0] + result[1];// + result[2] + result[3];
       }
-      for (k=(K/4)*4; k < K; ++k) {
+      for (; k < K; ++k) {
         cij += A[k+i*lda] * B[k+j*lda];
       }
       C[i+j*lda] = cij;
     }
+  free(result);
 }
 
 static void transpose(int lda, double *A, double *Atrans) {
+  int j = 0;
   for (int i = 0; i < lda; i++) {
-    for (int j = 0; j < lda; j++) {
+    for (j = 0; j < lda/4*4; j+=4) {
+      Atrans[j+i*lda] = A[i+j*lda];
+      Atrans[(j+1)+i*lda] = A[i+(j+1)*lda];
+      Atrans[(j+2)+i*lda] = A[i+(j+2)*lda];
+      Atrans[(j+3)+i*lda] = A[i+(j+3)*lda];
+    }
+    for (; j < lda; j++) {
       Atrans[j+i*lda] = A[i+j*lda];
     }
   }
@@ -60,13 +74,14 @@ void square_dgemm (int lda, double* A, double* B, double* C)
       /* Accumulate block dgemms into block of C */
       for (int k = 0; k < lda; k += BLOCK_SIZE)
       {
-        	/* Correct block dimensions if block "goes off edge of" the matrix */
-        	int M = min (BLOCK_SIZE, lda-i);
-        	int N = min (BLOCK_SIZE, lda-j);
-        	int K = min (BLOCK_SIZE, lda-k);
+          /* Correct block dimensions if block "goes off edge of" the matrix */
+          int M = min (BLOCK_SIZE, lda-i);
+          int N = min (BLOCK_SIZE, lda-j);
+          int K = min (BLOCK_SIZE, lda-k);
 
-        	/* Perform individual block dgemm */
-        	do_block(lda, M, N, K, Atrans + k + i*lda, B + k + j*lda, C + i + j*lda);
+          /* Perform individual block dgemm */
+          do_block(lda, M, N, K, Atrans + k + i*lda, B + k + j*lda, C + i + j*lda);
       }
+  free(Atrans);
 }
 
