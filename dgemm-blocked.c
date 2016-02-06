@@ -1,4 +1,5 @@
 const char* dgemm_desc = "Simple blocked dgemm.";
+// #include "avxintrin_emu.h"
 
 #if defined(BLOCK_SIZE)
 #undef BLOCK_SIZE
@@ -25,7 +26,6 @@ static void do_block (int lda, int M, int N, int K, double* A, double* B, double
       /* Compute C(i,j) */
       cij = C[i+j*lda];
       for (k = 0; k < (K/4)*4; k+=4) {
-        // cij += A[i+k*lda] * B[k+j*lda] + A[i+(k+1)*lda] * B[k+1+j*lda] + A[i+(k+2)*lda] * B[k+2+j*lda] + A[i+(k+3)*lda] * B[k+3+j*lda];
         Avec = A + (k+i*lda);
         Bvec = B + (k+j*lda);
         cij += Avec[0]*Bvec[0] + Avec[1]*Bvec[1] + Avec[2]*Bvec[2] + Avec[3]*Bvec[3];
