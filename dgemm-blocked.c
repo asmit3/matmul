@@ -19,11 +19,11 @@ static void do_block (int lda, int M, int N, int K, double* A, double* B, double
   /* For each row i of A */
   for (i = 0; i < M; ++i)
   {
-    for (k=0; k< (K/8)*8; k+=8)
+    for (k=0; k< (K/4)*4; k+=4)
     /* For each column j of B */
     {
       __m256d Avec = _mm256_loadu_pd(A + (k+i*lda));
-      __m256d Cvec = _mm256_loadu_pd(A + (k+4+i*lda));
+//      __m256d Cvec = _mm256_loadu_pd(A + (k+4+i*lda));
       for (j = 0; j < N; ++j) 
       {
       /* Compute C(i,j) */
@@ -31,13 +31,13 @@ static void do_block (int lda, int M, int N, int K, double* A, double* B, double
 //        __m256d Avec = _mm256_loadu_pd(A + (k+i*lda));
         __m256d Bvec = _mm256_loadu_pd(B + (k+j*lda));
 //        __m256d Cvec = _mm256_loadu_pd(A + (k+4+i*lda));
-        __m256d Dvec = _mm256_loadu_pd(B + (k+4+j*lda));
+//        __m256d Dvec = _mm256_loadu_pd(B + (k+4+j*lda));
         __m256d prod1 = _mm256_mul_pd(Avec, Bvec);
-        __m256d prod2 = _mm256_mul_pd(Cvec, Dvec);
-        __m256d temp = _mm256_hadd_pd(prod1, prod2);
-        __m128d dotproduct = _mm_add_pd( _mm256_extractf128_pd( temp, 0 ), _mm256_extractf128_pd( temp, 1 ) );
-        _mm_storeu_pd(result, dotproduct);
-        cij += result[0] + result[1];// + result[2] + result[3];
+//        __m256d prod2 = _mm256_mul_pd(Cvec, Dvec);
+        __m256d temp = _mm256_hadd_pd(prod1, prod1);
+//        __m128d dotproduct = _mm_add_pd( _mm256_extractf128_pd( temp, 0 ), _mm256_extractf128_pd( temp, 1 ) );
+        _mm_storeu_pd(result, _mm256_extractf128_pd(temp,0));
+        cij += result[0] + result[1];
 //        for (k=(K/8)*8; k < K; ++k)
 //        {
 //          cij += A[k+i*lda] * B[k+j*lda];
@@ -45,7 +45,7 @@ static void do_block (int lda, int M, int N, int K, double* A, double* B, double
         C[i+j*lda] = cij;
       }
     }
-    for (k=(K/8)*8; k<K; ++k)
+    for (k=(K/4)*4; k<K; ++k)
     {
       for (j=0; j< N; ++j)
       {
