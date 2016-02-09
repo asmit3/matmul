@@ -5,6 +5,7 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 #undef BLOCK_SIZE
 #endif
 #define BLOCK_SIZE 52
+#define SMALL_BLOCK_1 8
 
 #define min(a,b) (((a)<(b))?(a):(b))
 
@@ -78,6 +79,26 @@ static void transpose(int lda, double *A, double *Atrans) {
   }
 }
 
+
+void smallblock_dgemm (int lda, int M, int N, int K, double* A, double* B, double* C)
+{
+  /* For each block-row of A */
+  for (int i = 0; i < lda; i += SMALL_BLOCK_1)
+    /* For each block-column of B */
+    for (int j = 0; j < lda; j += SMALL_BLOCK_1)
+      /* Accumulate block dgemms into block of C */
+      for (int k = 0; k < lda; k += SMALL_BLOCK_1)
+      {
+          /* Correct block dimensions if block "goes off edge of" the matrix */
+          int M = min (SMALL_BLOCK_1, lda-i);
+          int N = min (SMALL_BLOCK_1, lda-j);
+          int K = min (SMALL_BLOCK_1, lda-k);
+
+          /* Perform individual block dgemm */
+          do_block(lda, M, N, K, A + k + i*lda, B + k + j*lda, C + i + j*lda);
+      }
+}
+
 /* This routine performs a dgemm operation
  *  C := C + A * B
  * where A, B, and C are lda-by-lda matrices stored in column-major format. 
@@ -99,8 +120,10 @@ void square_dgemm (int lda, double* A, double* B, double* C)
           int K = min (BLOCK_SIZE, lda-k);
 
           /* Perform individual block dgemm */
-          do_block(lda, M, N, K, Atrans + k + i*lda, B + k + j*lda, C + i + j*lda);
+          smallblock_dgemm(lda, M, N, K, Atrans + k + i*lda, B + k + j*lda, C + i + j*lda);
       }
   free(Atrans);
 }
+
+
 
