@@ -4,59 +4,63 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 #if defined(BLOCK_SIZE)
 #undef BLOCK_SIZE
 #endif
-#define BLOCK_SIZE 48
+#define BLOCK_SIZE 52
 
 #define min(a,b) (((a)<(b))?(a):(b))
 
 /* This auxiliary subroutine performs a smaller dgemm operation
  *  C := C + A * B
  * where C is M-by-N, A is M-by-K, and B is K-by-N. */
-static void do_block (int lda, int M, int N, int K, double* A, double* B, double* C)
+static inline void do_block (int lda, int M, int N, int K, double* A, double* B, double* C)
 {
   int i=0,j=0,k=0;
-  double cij;
-  double* result = (double*) malloc(sizeof(double)*2);
+  double cij0,cij1,cij2,cij3;
+  // double* result = (double*) malloc(sizeof(double)*2);
   /* For each row i of A */
-  for (i = 0; i < M; ++i)
+  for (j = 0; j < N; ++j) 
   {
-    for (k=0; k< (K/4)*4; k+=4)
-    /* For each column j of B */
+    /* For each column j of B */ 
+    for (i = 0; i < M/4*4; i += 4)
     {
-      __m256d Avec = _mm256_loadu_pd(A + (k+i*lda));
-//      __m256d Cvec = _mm256_loadu_pd(A + (k+4+i*lda));
-      for (j = 0; j < N; ++j) 
-      {
       /* Compute C(i,j) */
-        cij = C[i+j*lda];
-//        __m256d Avec = _mm256_loadu_pd(A + (k+i*lda));
-        __m256d Bvec = _mm256_loadu_pd(B + (k+j*lda));
-//        __m256d Cvec = _mm256_loadu_pd(A + (k+4+i*lda));
-//        __m256d Dvec = _mm256_loadu_pd(B + (k+4+j*lda));
-        __m256d prod1 = _mm256_mul_pd(Avec, Bvec);
-//        __m256d prod2 = _mm256_mul_pd(Cvec, Dvec);
-        __m256d temp = _mm256_hadd_pd(prod1, prod1);
-//        __m128d dotproduct = _mm_add_pd( _mm256_extractf128_pd( temp, 0 ), _mm256_extractf128_pd( temp, 1 ) );
-        _mm_storeu_pd(result, _mm256_extractf128_pd(temp,0));
-        cij += result[0] + result[1];
-//        for (k=(K/8)*8; k < K; ++k)
-//        {
-//          cij += A[k+i*lda] * B[k+j*lda];
-//        }
-        C[i+j*lda] = cij;
+      // __mm256d Cvec = _mm256_loadu_pd(C + (i+j*lda));
+      cij0 = C[i+j*lda];
+      cij1 = C[i+1+j*lda];
+      cij2 = C[i+2+j*lda];
+      cij3 = C[i+3+j*lda];
+      for (k=0; k < K/4*4; k+=4) {
+      	// __mm256d Bvec = _mm256_loadu_pd(B + k+j*lda);
+        cij0 += A[k+i*lda] * B[k+j*lda] + A[k+1+i*lda] * B[k+1+j*lda] + A[k+2+i*lda] * B[k+2+j*lda] + A[k+3+i*lda] * B[k+3+j*lda];
+        cij1 += A[k+(i+1)*lda] * B[k+j*lda] + A[k+1+(i+1)*lda] * B[k+1+j*lda] + A[k+2+(i+1)*lda] * B[k+2+j*lda] + A[k+3+(i+1)*lda] * B[k+3+j*lda];
+        cij2 += A[k+(i+2)*lda] * B[k+j*lda] + A[k+1+(i+2)*lda] * B[k+1+j*lda] + A[k+2+(i+2)*lda] * B[k+2+j*lda] + A[k+3+(i+2)*lda] * B[k+3+j*lda];
+        cij3 += A[k+(i+3)*lda] * B[k+j*lda] + A[k+1+(i+3)*lda] * B[k+1+j*lda] + A[k+2+(i+3)*lda] * B[k+2+j*lda] + A[k+3+(i+3)*lda] * B[k+3+j*lda];
       }
+      for (k=K/4*4; k < K; k++) {
+        cij0 += A[k+i*lda] * B[k+j*lda];
+        cij1 += A[k+(i+1)*lda] * B[k+j*lda];
+        cij2 += A[k+(i+2)*lda] * B[k+j*lda];
+        cij3 += A[k+(i+3)*lda] * B[k+j*lda];
+      }
+      C[i+j*lda] = cij0;
+      C[i+1+j*lda] = cij1;
+      C[i+2+j*lda] = cij2;
+      C[i+3+j*lda] = cij3;
     }
-    for (k=(K/4)*4; k<K; ++k)
+        /* For each column j of B */ 
+    for (i = M/4*4; i < M; i ++)
     {
-      for (j=0; j< N; ++j)
-      {
-        
-        
-        C[i+j*lda] += A[k+i*lda]*B[k+j*lda];
+      /* Compute C(i,j) */
+      cij0 = C[i+j*lda];
+      for (k=0; k < K/4*4; k+=4) {
+        cij0 += A[k+i*lda] * B[k+j*lda] + A[k+1+i*lda] * B[k+1+j*lda] + A[k+2+i*lda] * B[k+2+j*lda] + A[k+3+i*lda] * B[k+3+j*lda];
       }
+      for (k=K/4*4; k < K; k++) {
+        cij0 += A[k+i*lda] * B[k+j*lda];
+      }
+      C[i+j*lda] = cij0;
     }
-//    C[i+j*lda] = cij;
   }
-  free(result);
+  // free(result);
 }
 
 static void transpose(int lda, double *A, double *Atrans) {
