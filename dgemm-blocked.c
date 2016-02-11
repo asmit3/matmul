@@ -5,7 +5,7 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 #if defined(BLOCK_SIZE)
 #undef BLOCK_SIZE
 #endif
-#define BLOCK_SIZE 72
+#define BLOCK_SIZE 48
 #define SMALL_BLOCK_1 24
 
 #define min(a,b) (((a)<(b))?(a):(b))
@@ -13,7 +13,7 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 /* This auxiliary subroutine performs a smaller dgemm operation
  *  C := C + A * B
  * where C is M-by-N, A is M-by-K, and B is K-by-N. */
-static inline void do_block (int lda, int M, int N, int K, double* A, double* B, double* C)
+static void do_block (int lda, int M, int N, int K, double* A, double* B, double* C)
 {
   int i=0,j=0,k=0;
   double cij0,cij1,cij2,cij3;
@@ -32,16 +32,16 @@ static inline void do_block (int lda, int M, int N, int K, double* A, double* B,
       cij3 = C[i+3+j*lda];
       for (k=0; k < K/4*4; k+=4) {
       	// __mm256d Bvec = _mm256_loadu_pd(B + k+j*lda);
-        cij0 += A[k+i*lda] * B[k+j*lda] + A[k+1+i*lda] * B[k+1+j*lda] + A[k+2+i*lda] * B[k+2+j*lda] + A[k+3+i*lda] * B[k+3+j*lda];
-        cij1 += A[k+(i+1)*lda] * B[k+j*lda] + A[k+1+(i+1)*lda] * B[k+1+j*lda] + A[k+2+(i+1)*lda] * B[k+2+j*lda] + A[k+3+(i+1)*lda] * B[k+3+j*lda];
-        cij2 += A[k+(i+2)*lda] * B[k+j*lda] + A[k+1+(i+2)*lda] * B[k+1+j*lda] + A[k+2+(i+2)*lda] * B[k+2+j*lda] + A[k+3+(i+2)*lda] * B[k+3+j*lda];
-        cij3 += A[k+(i+3)*lda] * B[k+j*lda] + A[k+1+(i+3)*lda] * B[k+1+j*lda] + A[k+2+(i+3)*lda] * B[k+2+j*lda] + A[k+3+(i+3)*lda] * B[k+3+j*lda];
+        cij0 += A[i+k*lda] * B[k+j*lda] + A[i+(k+1)*lda] * B[k+1+j*lda] + A[i+(k+2)*lda] * B[k+2+j*lda] + A[i+(k+3)*lda] * B[k+3+j*lda];
+        cij1 += A[i+1+(k)*lda] * B[k+j*lda] + A[i+1+(k+1)*lda] * B[k+1+j*lda] + A[i+1+(k+2)*lda] * B[k+2+j*lda] + A[i+1+(k+3)*lda] * B[k+3+j*lda];
+        cij2 += A[i+2+(k)*lda] * B[k+j*lda] + A[i+2+(k+1)*lda] * B[k+1+j*lda] + A[i+2+(k+2)*lda] * B[k+2+j*lda] + A[i+2+(k+3)*lda] * B[k+3+j*lda];
+        cij3 += A[i+3+(k)*lda] * B[k+j*lda] + A[i+3+(k+1)*lda] * B[k+1+j*lda] + A[i+3+(k+2)*lda] * B[k+2+j*lda] + A[i+3+(k+3)*lda] * B[k+3+j*lda];
       }
       for (k=K/4*4; k < K; k++) {
-        cij0 += A[k+i*lda] * B[k+j*lda];
-        cij1 += A[k+(i+1)*lda] * B[k+j*lda];
-        cij2 += A[k+(i+2)*lda] * B[k+j*lda];
-        cij3 += A[k+(i+3)*lda] * B[k+j*lda];
+        cij0 += A[i+k*lda] * B[k+j*lda];
+        cij1 += A[i+1+(k)*lda] * B[k+j*lda];
+        cij2 += A[i+2+(k)*lda] * B[k+j*lda];
+        cij3 += A[i+3+(k)*lda] * B[k+j*lda];
       }
       C[i+j*lda] = cij0;
       C[i+1+j*lda] = cij1;
@@ -54,10 +54,10 @@ static inline void do_block (int lda, int M, int N, int K, double* A, double* B,
       /* Compute C(i,j) */
       cij0 = C[i+j*lda];
       for (k=0; k < K/4*4; k+=4) {
-        cij0 += A[k+i*lda] * B[k+j*lda] + A[k+1+i*lda] * B[k+1+j*lda] + A[k+2+i*lda] * B[k+2+j*lda] + A[k+3+i*lda] * B[k+3+j*lda];
+        cij0 += A[i+k*lda] * B[k+j*lda] + A[i+(k+1)*lda] * B[k+1+j*lda] + A[i+(k+2)*lda] * B[k+2+j*lda] + A[i+(k+3)*lda] * B[k+3+j*lda];
       }
       for (k=K/4*4; k < K; k++) {
-        cij0 += A[k+i*lda] * B[k+j*lda];
+        cij0 += A[i+k*lda] * B[k+j*lda];
       }
       C[i+j*lda] = cij0;
     }
@@ -96,7 +96,7 @@ void smallblock_dgemm (int lda, int M, int N, int K, double* A, double* B, doubl
           int K1 = min (SMALL_BLOCK_1, K-k);
 
           /* Perform individual block dgemm */
-          do_block(lda, M1, N1, K1, A + k + i*lda, B + k + j*lda, C + i + j*lda);
+          do_block(lda, M1, N1, K1, A + i + k*lda, B + k + j*lda, C + i + j*lda);
       }
 }
 
@@ -106,8 +106,8 @@ void smallblock_dgemm (int lda, int M, int N, int K, double* A, double* B, doubl
  * On exit, A and B maintain their input values. */  
 void square_dgemm (int lda, double* A, double* B, double* C)
 {
-  double *Atrans = malloc(sizeof(double)*lda*lda);
-  transpose(lda, A, Atrans);
+//  double *Atrans = malloc(sizeof(double)*lda*lda);
+//  transpose(lda, A, Atrans);
   /* For each block-row of A */ 
   for (int i = 0; i < lda; i += BLOCK_SIZE)
     /* For each block-column of B */
@@ -119,11 +119,11 @@ void square_dgemm (int lda, double* A, double* B, double* C)
           int M = min (BLOCK_SIZE, lda-i);
           int N = min (BLOCK_SIZE, lda-j);
           int K = min (BLOCK_SIZE, lda-k);
-
           /* Perform individual block dgemm */
-          smallblock_dgemm(lda, M, N, K, Atrans + k + i*lda, B + k + j*lda, C + i + j*lda);
+          smallblock_dgemm(lda, M, N, K, A + i + k*lda, B + k + j*lda, C + i + j*lda);
+//          do_block(lda, M, N, K, Atrans + k + i*lda, B + k + j*lda, C + i + j*lda);
       }
-  free(Atrans);
+ // free(Atrans);
 }
 
 
