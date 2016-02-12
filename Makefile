@@ -3,7 +3,7 @@
 
 CC = cc 
 #OPT = -O3 -march=core2 -ffast-math -funroll-loops -ftree-vectorize
-OPT = -O3
+OPT = -O3 -funroll-loops
 CFLAGS = -Wall -std=gnu99 $(OPT)
 LDFLAGS = -Wall
 # librt is needed for clock_gettime
