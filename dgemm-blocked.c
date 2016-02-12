@@ -5,10 +5,13 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 #if defined(BLOCK_SIZE)
 #undef BLOCK_SIZE
 #endif
-#define BLOCK_SIZE 48
-#define SMALL_BLOCK_1 24
+#define BLOCK_SIZE 32
+#define SMALL_BLOCK_1 4
 
 #define min(a,b) (((a)<(b))?(a):(b))
+
+static double Ablock[SMALL_BLOCK_1*SMALL_BLOCK_1];
+static double Bblock[BLOCK_SIZE*BLOCK_SIZE];
 
 /* This auxiliary subroutine performs a smaller dgemm operation
  *  C := C + A * B
@@ -81,14 +84,17 @@ static void transpose(int lda, double *A, double *Atrans) {
 }
 
 
-void smallblock_dgemm (int lda, int M, int N, int K, double* A, double* B, double* C)
+static void smallblock_dgemm (int lda, int M, int N, int K, double* A, double* B, double* C)
 {
-  /* For each block-row of A */
-  for (int i = 0; i < M; i += SMALL_BLOCK_1)
-    /* For each block-column of B */
-    for (int j = 0; j < N; j += SMALL_BLOCK_1)
-      /* Accumulate block dgemms into block of C */
-      for (int k = 0; k < K; k += SMALL_BLOCK_1)
+  /* Accumulate block dgemms into block of C */
+  for (int k = 0; k < K; k += SMALL_BLOCK_1)
+  {
+    /* For each block-row of A */
+    for (int i = 0; i < M; i += SMALL_BLOCK_1)
+    {
+      memcpy(Ablock, A + i + k*lda, sizeof(double)*SMALL_BLOCK_1*SMALL_BLOCK_1);
+      /* For each block-column of B */
+      for (int j = 0; j < N; j += SMALL_BLOCK_1)
       {
           /* Correct block dimensions if block "goes off edge of" the matrix */
           int M1 = min (SMALL_BLOCK_1, M-i);
@@ -96,8 +102,10 @@ void smallblock_dgemm (int lda, int M, int N, int K, double* A, double* B, doubl
           int K1 = min (SMALL_BLOCK_1, K-k);
 
           /* Perform individual block dgemm */
-          do_block(lda, M1, N1, K1, A + i + k*lda, B + k + j*lda, C + i + j*lda);
+          do_block(lda, M1, N1, K1, Ablock, B + k + j*lda, C + i + j*lda);
       }
+    }
+  }
 }
 
 /* This routine performs a dgemm operation
@@ -106,24 +114,30 @@ void smallblock_dgemm (int lda, int M, int N, int K, double* A, double* B, doubl
  * On exit, A and B maintain their input values. */  
 void square_dgemm (int lda, double* A, double* B, double* C)
 {
+  // static double *Ablock = malloc(sizeof(double)*SMALL_BLOCK_1*SMALL_BLOCK_1);
 //  double *Atrans = malloc(sizeof(double)*lda*lda);
 //  transpose(lda, A, Atrans);
-  /* For each block-row of A */ 
-  for (int i = 0; i < lda; i += BLOCK_SIZE)
-    /* For each block-column of B */
-    for (int j = 0; j < lda; j += BLOCK_SIZE)
-      /* Accumulate block dgemms into block of C */
-      for (int k = 0; k < lda; k += BLOCK_SIZE)
+
+  /* For each block-column of B */
+  for (int j = 0; j < lda; j += BLOCK_SIZE)
+  {
+    /* Accumulate block dgemms into block of C */
+    for (int k = 0; k < lda; k += BLOCK_SIZE)
+    {
+      memcpy(Bblock, B + k + j*lda, sizeof(double)*BLOCK_SIZE*BLOCK_SIZE);
+      /* For each block-row of A */ 
+      for (int i = 0; i < lda; i += BLOCK_SIZE)
       {
           /* Correct block dimensions if block "goes off edge of" the matrix */
           int M = min (BLOCK_SIZE, lda-i);
           int N = min (BLOCK_SIZE, lda-j);
           int K = min (BLOCK_SIZE, lda-k);
           /* Perform individual block dgemm */
-          smallblock_dgemm(lda, M, N, K, A + i + k*lda, B + k + j*lda, C + i + j*lda);
-//          do_block(lda, M, N, K, Atrans + k + i*lda, B + k + j*lda, C + i + j*lda);
+          // smallblock_dgemm(lda, M, N, K, A + i + k*lda, B + k + j*lda, C + i + j*lda);
+         do_block(lda, M, N, K, A + i + k*lda, Bblock, C + i + j*lda);
       }
- // free(Atrans);
+    }
+  }
 }
 
 
