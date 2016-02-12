@@ -2,7 +2,7 @@
 # This makefile is intended for the GNU C compiler. To change compilers, you need to type something like: "module swap PrgEnv-pgi PrgEnv-gnu" See the NERSC documentation for available compilers.
 
 CC = cc 
-#OPT = -O3 -march=core2 -ffast-math -funroll-loops -ftree-vectorize -static
+#OPT = -O3 -march=core2 -ffast-math -funroll-loops -ftree-vectorize
 OPT = -O3
 CFLAGS = -Wall -std=gnu99 $(OPT)
 LDFLAGS = -Wall
