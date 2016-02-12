@@ -10,8 +10,8 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 
 
 #define SMALL_BLOCK_SIZE 32
-#define MEDIUM_BLOCK_SIZE 64
-#define BIG_BLOCK_SIZE 128
+#define MEDIUM_BLOCK_SIZE 32
+#define BIG_BLOCK_SIZE 32
 
 #define min(a,b) (((a)<(b))?(a):(b))
 
@@ -122,27 +122,51 @@ void square_dgemm (int lda, double* A, double* B, double* C)
   // static double *Ablock = malloc(sizeof(double)*SMALL_BLOCK_1*SMALL_BLOCK_1);
 //  double *Atrans = malloc(sizeof(double)*lda*lda);
 //  transpose(lda, A, Atrans);
+  int newsize = ((lda+7)/8)*8;
+  double *Aalign, *Balign, *Calign;
+  posix_memalign(&Aalign, sizeof(double)*8, sizeof(double)*newsize*newsize);
+  posix_memalign(&Balign, sizeof(double)*8, sizeof(double)*newsize*newsize);
+  posix_memalign(&Calign, sizeof(double)*8, sizeof(double)*newsize*newsize);
+  for (int i = 0; i < lda; ++i)
+  {
+       memcpy(Aalign+i*newsize, A+i*lda, sizeof(double)*lda);
+       memcpy(Balign+i*newsize, B+i*lda, sizeof(double)*lda);
+       memset(Aalign+lda+i*newsize, 0.0, sizeof(double)*(newsize-lda));
+       memset(Balign+lda+i*newsize, 0.0, sizeof(double)*(newsize-lda));
 
+  }
+  for (int i = lda; i < newsize; ++i)
+  {
+     memset(Aalign+i*newsize, 0.0, sizeof(double)*newsize);
+     memset(Balign+i*newsize, 0.0, sizeof(double)*newsize);
+  }
   /* For each block-column of B */
-  for (int j = 0; j < lda; j += BIG_BLOCK_SIZE)
+  for (int j = 0; j < newsize; j += BIG_BLOCK_SIZE)
   {
     /* Accumulate block dgemms into block of C */
-    for (int i = 0; i < lda; i += MEDIUM_BLOCK_SIZE)
+    for (int i = 0; i < newsize; i += MEDIUM_BLOCK_SIZE)
     {
 //      memcpy(Bblock, B + k + j*lda, sizeof(double)*BLOCK_SIZE*BLOCK_SIZE);
       /* For each block-row of A */ 
-      for (int k = 0; k < lda; k += SMALL_BLOCK_SIZE)
+      for (int k = 0; k < newsize; k += SMALL_BLOCK_SIZE)
       {
           /* Correct block dimensions if block "goes off edge of" the matrix */
-          int M = min (MEDIUM_BLOCK_SIZE, lda-i);
-          int N = min (BIG_BLOCK_SIZE, lda-j);
-          int K = min (SMALL_BLOCK_SIZE, lda-k);
+          int M = min (MEDIUM_BLOCK_SIZE, newsize-i);
+          int N = min (BIG_BLOCK_SIZE, newsize-j);
+          int K = min (SMALL_BLOCK_SIZE, newsize-k);
           /* Perform individual block dgemm */
-           smallblock_dgemm(lda, M, N, K, A + i + k*lda, B + k + j*lda, C + i + j*lda);
-//          do_block(lda, M, N, K, A + i + k*lda, B+k+j*lda, C + i + j*lda);
+//           smallblock_dgemm(lda, M, N, K, A + i + k*lda, B + k + j*lda, C + i + j*lda);
+          do_block(newsize, M, N, K, Aalign + i + k*newsize, Balign+k+j*newsize, Calign + i + j*newsize);
       }
     }
   }
+  for (int i = 0; i < lda; ++i)
+  {
+     memcpy(C+i*lda, Calign+i*newsize, sizeof(double)*lda);
+  }
+  free(Aalign);
+  free(Balign);
+  free(Calign);
 }
 
 
