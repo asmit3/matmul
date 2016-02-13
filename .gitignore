@@ -4,3 +4,4 @@ benchmark-naive
 *.o
 *.out
 *.err
+output*
