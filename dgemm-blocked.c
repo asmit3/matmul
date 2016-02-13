@@ -1,11 +1,12 @@
 const char* dgemm_desc = "Simple blocked dgemm.";
 #include "avxintrin-emu.h"
 #include <stdlib.h>
+#include <string.h>
 
 #if defined(BLOCK_SIZE)
 #undef BLOCK_SIZE
 #endif
-#define BLOCK_SIZE 48
+#define BLOCK_SIZE 32
 #define SMALL_BLOCK_1 24
 
 
@@ -123,47 +124,79 @@ void square_dgemm (int lda, double* A, double* B, double* C)
 //  double *Atrans = malloc(sizeof(double)*lda*lda);
 //  transpose(lda, A, Atrans);
   int newsize = ((lda+7)/8)*8;
-  double *Aalign, *Balign, *Calign;
-  posix_memalign(&Aalign, sizeof(double)*8, sizeof(double)*newsize*newsize);
-  posix_memalign(&Balign, sizeof(double)*8, sizeof(double)*newsize*newsize);
-  posix_memalign(&Calign, sizeof(double)*8, sizeof(double)*newsize*newsize);
-  for (int i = 0; i < lda; ++i)
-  {
-       memcpy(Aalign+i*newsize, A+i*lda, sizeof(double)*lda);
-       memcpy(Balign+i*newsize, B+i*lda, sizeof(double)*lda);
-       memset(Aalign+lda+i*newsize, 0.0, sizeof(double)*(newsize-lda));
-       memset(Balign+lda+i*newsize, 0.0, sizeof(double)*(newsize-lda));
+  //printf("%d\n",newsize); 
 
+
+  // double *Aalign, *Balign, *Calign;
+  // posix_memalign(&Aalign, sizeof(double)*8, sizeof(double)*newsize*newsize);
+  // posix_memalign(&Balign, sizeof(double)*8, sizeof(double)*newsize*newsize);
+  // posix_memalign(&Calign, sizeof(double)*8, sizeof(double)*newsize*newsize);
+  double *Aalign = malloc(sizeof(double)*newsize*newsize);
+  double *Balign = malloc(sizeof(double)*newsize*newsize);
+  double *Calign = malloc(sizeof(double)*newsize*newsize);
+
+
+
+  // for (int i = 0; i < lda; ++i)
+  // {
+  //      memcpy(Aalign+i*newsize, A+i*lda, sizeof(double)*lda);
+  //      memcpy(Balign+i*newsize, B+i*lda, sizeof(double)*lda);
+  //      memset(Aalign+lda+i*newsize, 0.0, sizeof(double)*(newsize-lda));
+  //      memset(Balign+lda+i*newsize, 0.0, sizeof(double)*(newsize-lda));
+
+  // }
+  // for (int i = lda; i < newsize; ++i)
+  // {
+  //    memset(Aalign+i*newsize, 0.0, sizeof(double)*newsize);
+  //    memset(Balign+i*newsize, 0.0, sizeof(double)*newsize);
+  // }
+  for (int i = 0; i < newsize; i++) {
+  	for (int j = 0; j < newsize; j++) {
+  		if (i > lda || j > lda) {
+	  		Aalign[j+i*newsize] = 0;
+	  		Balign[j+i*newsize] = 0;
+	  	} else {
+  	  		Aalign[j+i*newsize] = A[j+i*lda];
+  	  		Balign[j+i*newsize] = B[j+i*lda];
+  	  	}
+  	}
   }
-  for (int i = lda; i < newsize; ++i)
-  {
-     memset(Aalign+i*newsize, 0.0, sizeof(double)*newsize);
-     memset(Balign+i*newsize, 0.0, sizeof(double)*newsize);
-  }
+
+
+
   /* For each block-column of B */
-  for (int j = 0; j < newsize; j += BIG_BLOCK_SIZE)
+  for (int j = 0; j < newsize; j += BLOCK_SIZE)
   {
     /* Accumulate block dgemms into block of C */
-    for (int i = 0; i < newsize; i += MEDIUM_BLOCK_SIZE)
+    for (int i = 0; i < newsize; i += BLOCK_SIZE)
     {
-//      memcpy(Bblock, B + k + j*lda, sizeof(double)*BLOCK_SIZE*BLOCK_SIZE);
       /* For each block-row of A */ 
-      for (int k = 0; k < newsize; k += SMALL_BLOCK_SIZE)
+      for (int k = 0; k < newsize; k += BLOCK_SIZE)
       {
           /* Correct block dimensions if block "goes off edge of" the matrix */
-          int M = min (MEDIUM_BLOCK_SIZE, newsize-i);
-          int N = min (BIG_BLOCK_SIZE, newsize-j);
-          int K = min (SMALL_BLOCK_SIZE, newsize-k);
+          int M = min (BLOCK_SIZE, newsize-i);
+          int N = min (BLOCK_SIZE, newsize-j);
+          int K = min (BLOCK_SIZE, newsize-k);
           /* Perform individual block dgemm */
-//           smallblock_dgemm(lda, M, N, K, A + i + k*lda, B + k + j*lda, C + i + j*lda);
+//           smallblock_dgemm(newsize, M, N, K, A + i + k*newsize, B + k + j*newsize, C + i + j*newsize);
           do_block(newsize, M, N, K, Aalign + i + k*newsize, Balign+k+j*newsize, Calign + i + j*newsize);
       }
     }
   }
-  for (int i = 0; i < lda; ++i)
-  {
-     memcpy(C+i*lda, Calign+i*newsize, sizeof(double)*lda);
+
+
+
+  // for (int i = 0; i < lda; ++i)
+  // {
+  //    memcpy(C+i*lda, Calign+i*newsize, sizeof(double)*lda);
+  // }
+  for (int i = 0; i < lda; i++) {
+  	for (int j = 0; j < lda; j++) {
+  		C[j+i*lda] = Calign[j+i*newsize];
+  	}
   }
+
+
   free(Aalign);
   free(Balign);
   free(Calign);
