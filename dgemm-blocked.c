@@ -22,51 +22,81 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 static void do_block (int lda, int M, int N, int K, double* A, double* B, double* C)
 {
   int i=0,j=0,k=0;
-  double cij0,cij1,cij2,cij3;
+  double cij00,cij10,cij20,cij30;
+  double cij01,cij11,cij21,cij31;
+  double cij02,cij12,cij22,cij32;
+  double cij03,cij13,cij23,cij33;
   // double* result = (double*) malloc(sizeof(double)*2);
   /* For each row i of A */
-  for (j = 0; j < N; ++j) 
+  for (j = 0; j < N; j+=4) 
   {
     /* For each column j of B */ 
     for (i = 0; i < M; i += 4)
     {
       /* Compute C(i,j) */
       // __mm256d Cvec = _mm256_loadu_pd(C + (i+j*lda));
-      cij0 = C[i+j*lda];
-      cij1 = C[i+1+j*lda];
-      cij2 = C[i+2+j*lda];
-      cij3 = C[i+3+j*lda];
+      cij00 = C[i+j*lda];
+      cij10 = C[i+1+j*lda];
+      cij20 = C[i+2+j*lda];
+      cij30 = C[i+3+j*lda];
+
+      cij01 = C[i+(j+1)*lda];
+      cij11 = C[i+1+(j+1)*lda];
+      cij21 = C[i+2+(j+1)*lda];
+      cij31 = C[i+3+(j+1)*lda];
+
+      cij02 = C[i+(j+2)*lda];
+      cij12 = C[i+1+(j+2)*lda];
+      cij22 = C[i+2+(j+2)*lda];
+      cij32 = C[i+3+(j+2)*lda];   
+
+      cij03 = C[i+(j+3)*lda];
+      cij13 = C[i+1+(j+3)*lda];
+      cij23 = C[i+2+(j+3)*lda];
+      cij33 = C[i+3+(j+3)*lda];
       for (k=0; k < K; k+=4) {
       	// __mm256d Bvec = _mm256_loadu_pd(B + k+j*lda);
-        cij0 += A[i+k*lda] * B[k+j*lda] + A[i+(k+1)*lda] * B[k+1+j*lda] + A[i+(k+2)*lda] * B[k+2+j*lda] + A[i+(k+3)*lda] * B[k+3+j*lda];
-        cij1 += A[i+1+(k)*lda] * B[k+j*lda] + A[i+1+(k+1)*lda] * B[k+1+j*lda] + A[i+1+(k+2)*lda] * B[k+2+j*lda] + A[i+1+(k+3)*lda] * B[k+3+j*lda];
-        cij2 += A[i+2+(k)*lda] * B[k+j*lda] + A[i+2+(k+1)*lda] * B[k+1+j*lda] + A[i+2+(k+2)*lda] * B[k+2+j*lda] + A[i+2+(k+3)*lda] * B[k+3+j*lda];
-        cij3 += A[i+3+(k)*lda] * B[k+j*lda] + A[i+3+(k+1)*lda] * B[k+1+j*lda] + A[i+3+(k+2)*lda] * B[k+2+j*lda] + A[i+3+(k+3)*lda] * B[k+3+j*lda];
+        cij00 += A[i+k*lda] * B[k+j*lda] + A[i+(k+1)*lda] * B[k+1+j*lda] + A[i+(k+2)*lda] * B[k+2+j*lda] + A[i+(k+3)*lda] * B[k+3+j*lda];
+        cij10 += A[i+1+(k)*lda] * B[k+j*lda] + A[i+1+(k+1)*lda] * B[k+1+j*lda] + A[i+1+(k+2)*lda] * B[k+2+j*lda] + A[i+1+(k+3)*lda] * B[k+3+j*lda];
+        cij20 += A[i+2+(k)*lda] * B[k+j*lda] + A[i+2+(k+1)*lda] * B[k+1+j*lda] + A[i+2+(k+2)*lda] * B[k+2+j*lda] + A[i+2+(k+3)*lda] * B[k+3+j*lda];
+        cij30 += A[i+3+(k)*lda] * B[k+j*lda] + A[i+3+(k+1)*lda] * B[k+1+j*lda] + A[i+3+(k+2)*lda] * B[k+2+j*lda] + A[i+3+(k+3)*lda] * B[k+3+j*lda];
+        
+        cij01 += A[i+k*lda] * B[k+(j+1)*lda] + A[i+(k+1)*lda] * B[k+1+(j+1)*lda] + A[i+(k+2)*lda] * B[k+2+(j+1)*lda] + A[i+(k+3)*lda] * B[k+3+(j+1)*lda];
+        cij11 += A[i+1+(k)*lda] * B[k+(j+1)*lda] + A[i+1+(k+1)*lda] * B[k+1+(j+1)*lda] + A[i+1+(k+2)*lda] * B[k+2+(j+1)*lda] + A[i+1+(k+3)*lda] * B[k+3+(j+1)*lda];
+        cij21 += A[i+2+(k)*lda] * B[k+(j+1)*lda] + A[i+2+(k+1)*lda] * B[k+1+(j+1)*lda] + A[i+2+(k+2)*lda] * B[k+2+(j+1)*lda] + A[i+2+(k+3)*lda] * B[k+3+(j+1)*lda];
+        cij31 += A[i+3+(k)*lda] * B[k+(j+1)*lda] + A[i+3+(k+1)*lda] * B[k+1+(j+1)*lda] + A[i+3+(k+2)*lda] * B[k+2+(j+1)*lda] + A[i+3+(k+3)*lda] * B[k+3+(j+1)*lda];
+        
+        cij02 += A[i+k*lda] * B[k+(j+2)*lda] + A[i+(k+1)*lda] * B[k+1+(j+2)*lda] + A[i+(k+2)*lda] * B[k+2+(j+2)*lda] + A[i+(k+3)*lda] * B[k+3+(j+2)*lda];
+        cij12 += A[i+1+(k)*lda] * B[k+(j+2)*lda] + A[i+1+(k+1)*lda] * B[k+1+(j+2)*lda] + A[i+1+(k+2)*lda] * B[k+2+(j+2)*lda] + A[i+1+(k+3)*lda] * B[k+3+(j+2)*lda];
+        cij22 += A[i+2+(k)*lda] * B[k+(j+2)*lda] + A[i+2+(k+1)*lda] * B[k+1+(j+2)*lda] + A[i+2+(k+2)*lda] * B[k+2+(j+2)*lda] + A[i+2+(k+3)*lda] * B[k+3+(j+2)*lda];
+        cij32 += A[i+3+(k)*lda] * B[k+(j+2)*lda] + A[i+3+(k+1)*lda] * B[k+1+(j+2)*lda] + A[i+3+(k+2)*lda] * B[k+2+(j+2)*lda] + A[i+3+(k+3)*lda] * B[k+3+(j+2)*lda];
+        
+        cij03 += A[i+k*lda] * B[k+(j+3)*lda] + A[i+(k+1)*lda] * B[k+1+(j+3)*lda] + A[i+(k+2)*lda] * B[k+2+(j+3)*lda] + A[i+(k+3)*lda] * B[k+3+(j+3)*lda];
+        cij13 += A[i+1+(k)*lda] * B[k+(j+3)*lda] + A[i+1+(k+1)*lda] * B[k+1+(j+3)*lda] + A[i+1+(k+2)*lda] * B[k+2+(j+3)*lda] + A[i+1+(k+3)*lda] * B[k+3+(j+3)*lda];
+        cij23 += A[i+2+(k)*lda] * B[k+(j+3)*lda] + A[i+2+(k+1)*lda] * B[k+1+(j+3)*lda] + A[i+2+(k+2)*lda] * B[k+2+(j+3)*lda] + A[i+2+(k+3)*lda] * B[k+3+(j+3)*lda];
+        cij33 += A[i+3+(k)*lda] * B[k+(j+3)*lda] + A[i+3+(k+1)*lda] * B[k+1+(j+3)*lda] + A[i+3+(k+2)*lda] * B[k+2+(j+3)*lda] + A[i+3+(k+3)*lda] * B[k+3+(j+3)*lda];
       }
-      // for (k=K/4*4; k < K; k++) {
-      //   cij0 += A[i+k*lda] * B[k+j*lda];
-      //   cij1 += A[i+1+(k)*lda] * B[k+j*lda];
-      //   cij2 += A[i+2+(k)*lda] * B[k+j*lda];
-      //   cij3 += A[i+3+(k)*lda] * B[k+j*lda];
-      // }
-      C[i+j*lda] = cij0;
-      C[i+1+j*lda] = cij1;
-      C[i+2+j*lda] = cij2;
-      C[i+3+j*lda] = cij3;
+      C[i+j*lda] = cij00;
+      C[i+1+j*lda] = cij10;
+      C[i+2+j*lda] = cij20;
+      C[i+3+j*lda] = cij30;
+
+      C[i+(j+1)*lda] = cij01;
+      C[i+1+(j+1)*lda] = cij11;
+      C[i+2+(j+1)*lda] = cij21;
+      C[i+3+(j+1)*lda] = cij31;
+
+      C[i+(j+2)*lda] = cij02;
+      C[i+1+(j+2)*lda] = cij12;
+      C[i+2+(j+2)*lda] = cij22;
+      C[i+3+(j+2)*lda] = cij32;
+
+      C[i+(j+3)*lda] = cij03;
+      C[i+1+(j+3)*lda] = cij13;
+      C[i+2+(j+3)*lda] = cij23;
+      C[i+3+(j+3)*lda] = cij33;
+
     }
-    //     /* For each column j of B */ 
-    // for (i = M/4*4; i < M; i ++)
-    // {
-    //   /* Compute C(i,j) */
-    //   cij0 = C[i+j*lda];
-    //   for (k=0; k < K/4*4; k+=4) {
-    //     cij0 += A[i+k*lda] * B[k+j*lda] + A[i+(k+1)*lda] * B[k+1+j*lda] + A[i+(k+2)*lda] * B[k+2+j*lda] + A[i+(k+3)*lda] * B[k+3+j*lda];
-    //   }
-    //   for (k=K/4*4; k < K; k++) {
-    //     cij0 += A[i+k*lda] * B[k+j*lda];
-    //   }
-    //   C[i+j*lda] = cij0;
-    // }
   }
   // free(result);
 }
