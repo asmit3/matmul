@@ -2,17 +2,14 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 #include "avxintrin-emu.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #if defined(BLOCK_SIZE)
 #undef BLOCK_SIZE
 #endif
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE 48
 #define SMALL_BLOCK_1 24
 
-
-#define SMALL_BLOCK_SIZE 32
-#define MEDIUM_BLOCK_SIZE 32
-#define BIG_BLOCK_SIZE 32
 
 #define min(a,b) (((a)<(b))?(a):(b))
 
@@ -22,7 +19,7 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 /* This auxiliary subroutine performs a smaller dgemm operation
  *  C := C + A * B
  * where C is M-by-N, A is M-by-K, and B is K-by-N. */
-static inline void do_block (int lda, int M, int N, int K, double* A, double* B, double* C)
+static void do_block (int lda, int M, int N, int K, double* A, double* B, double* C)
 {
   int i=0,j=0,k=0;
   double cij0,cij1,cij2,cij3;
@@ -31,7 +28,7 @@ static inline void do_block (int lda, int M, int N, int K, double* A, double* B,
   for (j = 0; j < N; ++j) 
   {
     /* For each column j of B */ 
-    for (i = 0; i < M/4*4; i += 4)
+    for (i = 0; i < M; i += 4)
     {
       /* Compute C(i,j) */
       // __mm256d Cvec = _mm256_loadu_pd(C + (i+j*lda));
@@ -39,37 +36,37 @@ static inline void do_block (int lda, int M, int N, int K, double* A, double* B,
       cij1 = C[i+1+j*lda];
       cij2 = C[i+2+j*lda];
       cij3 = C[i+3+j*lda];
-      for (k=0; k < K/4*4; k+=4) {
+      for (k=0; k < K; k+=4) {
       	// __mm256d Bvec = _mm256_loadu_pd(B + k+j*lda);
         cij0 += A[i+k*lda] * B[k+j*lda] + A[i+(k+1)*lda] * B[k+1+j*lda] + A[i+(k+2)*lda] * B[k+2+j*lda] + A[i+(k+3)*lda] * B[k+3+j*lda];
         cij1 += A[i+1+(k)*lda] * B[k+j*lda] + A[i+1+(k+1)*lda] * B[k+1+j*lda] + A[i+1+(k+2)*lda] * B[k+2+j*lda] + A[i+1+(k+3)*lda] * B[k+3+j*lda];
         cij2 += A[i+2+(k)*lda] * B[k+j*lda] + A[i+2+(k+1)*lda] * B[k+1+j*lda] + A[i+2+(k+2)*lda] * B[k+2+j*lda] + A[i+2+(k+3)*lda] * B[k+3+j*lda];
         cij3 += A[i+3+(k)*lda] * B[k+j*lda] + A[i+3+(k+1)*lda] * B[k+1+j*lda] + A[i+3+(k+2)*lda] * B[k+2+j*lda] + A[i+3+(k+3)*lda] * B[k+3+j*lda];
       }
-      for (k=K/4*4; k < K; k++) {
-        cij0 += A[i+k*lda] * B[k+j*lda];
-        cij1 += A[i+1+(k)*lda] * B[k+j*lda];
-        cij2 += A[i+2+(k)*lda] * B[k+j*lda];
-        cij3 += A[i+3+(k)*lda] * B[k+j*lda];
-      }
+      // for (k=K/4*4; k < K; k++) {
+      //   cij0 += A[i+k*lda] * B[k+j*lda];
+      //   cij1 += A[i+1+(k)*lda] * B[k+j*lda];
+      //   cij2 += A[i+2+(k)*lda] * B[k+j*lda];
+      //   cij3 += A[i+3+(k)*lda] * B[k+j*lda];
+      // }
       C[i+j*lda] = cij0;
       C[i+1+j*lda] = cij1;
       C[i+2+j*lda] = cij2;
       C[i+3+j*lda] = cij3;
     }
-        /* For each column j of B */ 
-    for (i = M/4*4; i < M; i ++)
-    {
-      /* Compute C(i,j) */
-      cij0 = C[i+j*lda];
-      for (k=0; k < K/4*4; k+=4) {
-        cij0 += A[i+k*lda] * B[k+j*lda] + A[i+(k+1)*lda] * B[k+1+j*lda] + A[i+(k+2)*lda] * B[k+2+j*lda] + A[i+(k+3)*lda] * B[k+3+j*lda];
-      }
-      for (k=K/4*4; k < K; k++) {
-        cij0 += A[i+k*lda] * B[k+j*lda];
-      }
-      C[i+j*lda] = cij0;
-    }
+    //     /* For each column j of B */ 
+    // for (i = M/4*4; i < M; i ++)
+    // {
+    //   /* Compute C(i,j) */
+    //   cij0 = C[i+j*lda];
+    //   for (k=0; k < K/4*4; k+=4) {
+    //     cij0 += A[i+k*lda] * B[k+j*lda] + A[i+(k+1)*lda] * B[k+1+j*lda] + A[i+(k+2)*lda] * B[k+2+j*lda] + A[i+(k+3)*lda] * B[k+3+j*lda];
+    //   }
+    //   for (k=K/4*4; k < K; k++) {
+    //     cij0 += A[i+k*lda] * B[k+j*lda];
+    //   }
+    //   C[i+j*lda] = cij0;
+    // }
   }
   // free(result);
 }
@@ -127,40 +124,44 @@ void square_dgemm (int lda, double* A, double* B, double* C)
   //printf("%d\n",newsize); 
 
 
-  // double *Aalign, *Balign, *Calign;
-  // posix_memalign(&Aalign, sizeof(double)*8, sizeof(double)*newsize*newsize);
-  // posix_memalign(&Balign, sizeof(double)*8, sizeof(double)*newsize*newsize);
-  // posix_memalign(&Calign, sizeof(double)*8, sizeof(double)*newsize*newsize);
-  double *Aalign = malloc(sizeof(double)*newsize*newsize);
-  double *Balign = malloc(sizeof(double)*newsize*newsize);
-  double *Calign = malloc(sizeof(double)*newsize*newsize);
+  double *Aalign, *Balign, *Calign;
+  posix_memalign(&Aalign, sizeof(double)*8, sizeof(double)*newsize*newsize);
+  posix_memalign(&Balign, sizeof(double)*8, sizeof(double)*newsize*newsize);
+  posix_memalign(&Calign, sizeof(double)*8, sizeof(double)*newsize*newsize);
+  // double *Aalign = malloc(sizeof(double)*newsize*newsize);
+  // double *Balign = malloc(sizeof(double)*newsize*newsize);
+  // double *Calign = malloc(sizeof(double)*newsize*newsize);
 
 
 
-  // for (int i = 0; i < lda; ++i)
-  // {
-  //      memcpy(Aalign+i*newsize, A+i*lda, sizeof(double)*lda);
-  //      memcpy(Balign+i*newsize, B+i*lda, sizeof(double)*lda);
-  //      memset(Aalign+lda+i*newsize, 0.0, sizeof(double)*(newsize-lda));
-  //      memset(Balign+lda+i*newsize, 0.0, sizeof(double)*(newsize-lda));
+  for (int i = 0; i < lda; ++i)
+  {
+       memcpy(Aalign+i*newsize, A+i*lda, sizeof(double)*lda);
+       memcpy(Balign+i*newsize, B+i*lda, sizeof(double)*lda);
+       memset(Aalign+lda+i*newsize, 0.0, sizeof(double)*(newsize-lda));
+       memset(Balign+lda+i*newsize, 0.0, sizeof(double)*(newsize-lda));
 
-  // }
-  // for (int i = lda; i < newsize; ++i)
-  // {
-  //    memset(Aalign+i*newsize, 0.0, sizeof(double)*newsize);
-  //    memset(Balign+i*newsize, 0.0, sizeof(double)*newsize);
-  // }
-  for (int i = 0; i < newsize; i++) {
-  	for (int j = 0; j < newsize; j++) {
-  		if (i > lda || j > lda) {
-	  		Aalign[j+i*newsize] = 0;
-	  		Balign[j+i*newsize] = 0;
-	  	} else {
-  	  		Aalign[j+i*newsize] = A[j+i*lda];
-  	  		Balign[j+i*newsize] = B[j+i*lda];
-  	  	}
-  	}
   }
+  for (int i = lda; i < newsize; ++i)
+  {
+     memset(Aalign+i*newsize, 0.0, sizeof(double)*newsize);
+     memset(Balign+i*newsize, 0.0, sizeof(double)*newsize);
+  }
+  memset(Calign, 0.0, sizeof(double)*newsize*newsize);
+  // for (int i = 0; i < newsize; i++) {
+  // 	for (int j = 0; j < newsize; j++) {
+  // 		if (i >= lda || j >= lda) {
+	 //  		Aalign[j+i*newsize] = 0;
+	 //  		Balign[j+i*newsize] = 0;
+	 //  	} else {
+  // 	  		Aalign[j+i*newsize] = A[j+i*lda];
+  // 	  		Balign[j+i*newsize] = B[j+i*lda];
+  // 	  	}
+  //     Calign[j+i*newsize] = 0;
+  // 	}
+  // }
+
+
 
 
 
@@ -184,18 +185,31 @@ void square_dgemm (int lda, double* A, double* B, double* C)
     }
   }
 
-
-
-  // for (int i = 0; i < lda; ++i)
-  // {
-  //    memcpy(C+i*lda, Calign+i*newsize, sizeof(double)*lda);
-  // }
-  for (int i = 0; i < lda; i++) {
-  	for (int j = 0; j < lda; j++) {
-  		C[j+i*lda] = Calign[j+i*newsize];
-  	}
+  for (int i = 0; i < lda; ++i)
+  {
+     memcpy(C+i*lda, Calign+i*newsize, sizeof(double)*lda);
   }
+  // for (int i = 0; i < lda; i++) {
+  // 	for (int j = 0; j < lda; j++) {
+  // 		C[j+i*lda] = Calign[j+i*newsize];
+  // 	}
+  // }
 
+  // printf("HERE IS C correct\n");
+  // for (int i = 0; i < lda; i++) {
+  //   for (int j = 0; j < lda; j++) {
+  //     printf("%+4.3f ", C[i + j*lda]);
+  //   }
+  //   printf("\n");
+  // }
+  // printf("HERE IS Calign\n");
+  // for (int i = 0; i < newsize; i++) {
+  //   for (int j = 0; j < newsize; j++) {
+  //     printf("%+4.3f ", Calign[i + j*newsize]);
+  //   }
+  //   printf("\n");
+  // }
+  // C[0] = 1976342;
 
   free(Aalign);
   free(Balign);
